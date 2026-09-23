@@ -1,0 +1,20 @@
+{
+  "passed": [
+    "Project View extension starts and creates its Window panel",
+    "exact Identity Data ID discovers placed assets; hidden geometry is excluded from the 1 m fit",
+    "Preview clips and highlights matches, preserves original surroundings, selection, model and camera",
+    "No highlight reveals original materials and re-enabling uses the chosen color",
+    "multiple views, rename, update, duplicate-name refusal, and delete undo/redo retain independent records",
+    "a read-only scene refuses a new saved record",
+    "Exit restores the original section and existing Object Colors scheme",
+    "normal scene Save/reopen shares named views without activating or moving the camera",
+    "new matching assets join on Refresh, retain saved box, and enter the box only on Refit",
+    "Refit with no visible match refreshes counts and colors while retaining the section",
+    "Exit restores the section and clears inspection even when Object Colors close fails",
+    "destroying Project View during inspection restores the section and color scheme",
+    "opening a saved view selects its recorded Project ID attribute and choices",
+    "the 105th distinct Project ID remains searchable and can be previewed",
+    "Preview refuses a no-visible project without changing section, colors, model or camera",
+    "a centimetre scene fits visible assets with exactly 100 stage units of padding per side"
+  ]
+}

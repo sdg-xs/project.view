@@ -1,0 +1,20 @@
+[package]
+version = "0.1.0"
+title = "Project View"
+description = "Save named construction views for assets selected by Project ID."
+category = "Viewport"
+keywords = ["project", "view", "section", "construction", "BIM"]
+readme = "README.md"
+
+[dependencies]
+"omni.ui" = {}
+"omni.usd" = {}
+"omni.kit.commands" = {}
+"omni.kit.usd_undo" = {}
+"omni.kit.menu.utils" = {}
+"omni.kit.viewport.utility" = {}
+"object.color" = {}
+"section.box" = {}
+
+[[python.module]]
+name = "project_view"

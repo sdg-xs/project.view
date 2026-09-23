@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+verification/kit.log
+verification/composer-*.log
+verification/composer-user.config.json
+verification/composer-startup-result.json
+verification/probe_composer_startup.py
+verification/*.usda
+verification/cache/
+verification/data/
+verification/user.config.json
