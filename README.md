@@ -1,6 +1,6 @@
 # Project View for USD Composer
 
-Save named construction inspection areas by Project ID. A view remembers its Project ID property and value, section box, and highlight choice. It finds matching assets again when you open it, so new assets with the same ID join the view. You navigate the camera yourself; this first version does not save or move the camera.
+Save named construction inspection areas by Project ID. A view remembers its Project ID property and value, section box, Asset Status property, display mode, selected row, status colors, and transparency percentages. It finds matching assets again when you open it, so new assets with the same ID join the view. You navigate the camera yourself; this version does not save or move the camera.
 
 ## Install
 
@@ -11,23 +11,37 @@ This version targets Kit 110.2 with an RTX viewport and a Z-up USD stage. The st
 ## Create a view
 
 1. Open the **Project View** panel. Click **Scan** to discover properties and Project IDs.
-2. The initial property is **Identity Data / Project ID**. Select another property when a model uses a different ID field. Search for an ID and select it.
-3. Choose **Preview**. The section box fits visible matching assets with one metre of padding on each side. Matching assets get the selected highlight color; surrounding materials stay original. Your camera does not move.
-4. Navigate to the area yourself and adjust the box using the Section Box panel or its viewport handles. Set another highlight color or choose **No highlight** to see original materials while keeping the section and Project ID.
-5. Enter a name and choose **Save New**. Use Composer's normal **Save** to write the view into the USD scene file. Use **Save As** for an anonymous new scene.
+2. The **Project ID property** dropdown defaults to **Identity Data / Project ID**. Select another property when a model uses a different ID field.
+3. Search for a Project ID and click it to preview its assets. The selected ID button gets a highlighted background. The section box restores that project's saved default, or fits all visible matching assets with one metre of padding on each side. **Color** mode applies every Asset Status group's color within the project. It uses the previous status property if available, otherwise the first discovered field. Your camera does not move.
+4. Use the **Asset Status** dropdown to choose among fields found on this project's assets. Below it, **Original** restores original materials and **Color** shows all status colors. The rows show the property's current statuses and counts. Assets outside the project keep their original materials.
+5. Click a status row to select it. Row selection keeps the display mode and other status colors unchanged. Click a row's color circle to choose from Object Colors' 40-color palette. In **Color** mode, that group repaints immediately. In **Original** mode, the choice is stored until you choose **Color**.
+Each row has a transparency slider and a percentage button between its status and color circle. Drag the slider and release to apply a percentage. Click **100%** to hide that group's geometry completely; the button then shows **0%**, which restores the group and resets its slider to 0%. The slider stays responsive while the scene updates; rapid changes apply the latest value. Transparency works in both **Original** and **Color** modes. At 0%, the selected mode keeps its normal appearance, including any transparency already in original materials. Other statuses keep their own percentages, and geometry outside the selected project or status remains visible. Intermediate percentages depend on the scene material and renderer: some RTX modes fade the surface without revealing geometry behind it. **100%** uses visibility and hides the geometry regardless of material.
 
-You can save several named views for one Project ID. **Update** replaces a saved view's box and color settings with the current inspection. **Rename** changes its label without changing the view. **Delete** removes its scene record; Composer Save commits that deletion to disk.
+6. Navigate to the area yourself and adjust the box using the Section Box panel or its viewport handles. The **Show Box** tick in Project View shows or hides the outline and handles without changing clipping; it stays in sync with the same tick in Section Box. Changing the status property, selected row, display mode, or colors keeps the box and camera in place.
+7. Enter a name and choose **Save New**. Use Composer's normal **Save** to write the view into the USD scene file. Use **Save As** for an anonymous new scene.
 
-## Reopen and refresh
+You can save several named views for one Project ID. **Update** replaces a saved view's box and status settings with the current inspection. **Rename** changes its label without changing the view. **Delete** removes its scene record; Composer Save commits that deletion to disk. Selecting a new Project ID starts in **Color** mode.
 
-Choose **Open** beside a saved view to restore its section box and color choice. Project View rescans the current scene for assets with the saved exact property and ID. It leaves your current camera alone. **Refresh assets** updates matching and color assignments without moving the box. **Refit section** changes the box to include the current visible matches using the displayed padding. If nothing visible can be fitted, the current box stays in place and the panel reports the count.
+## Save or reset a project's section
 
-Hidden assets remain hidden. The panel reports hidden matches and assets without usable geometry. Preview refuses an empty fit; an already saved view can still reopen when its matches have since disappeared or become hidden.
+After adjusting the box, choose **Save section** to make its position, size, and rotation the default for this exact Project ID property and value. Future clicks on that ID restore the saved section. **Reset section** removes the default and immediately fits all visible project assets with one metre of padding per side. Later ID clicks fit the project's current assets again.
+
+**Save section** and **Reset section** sit side by side above the full-width **Exit view** button. They preserve the camera, Original or Color mode, and palette choices. Use Composer **Save**, or **Save As** for an anonymous scene, to persist the default or its removal. Project defaults are independent of named views, which retain their own section and color settings.
+
+## Reopen a view
+
+Choose **Open** beside a saved view to restore its section box, Asset Status property, display mode, selected row, colors, and transparency. Project View rescans the current scene for assets with the saved exact property and ID, then discovers their current statuses. It leaves your current camera alone. Clicking a Project ID also rescans its assets, then restores its saved section default or fits a new preview.
+
+Views saved with the original schema still open with their whole-project highlight. Choosing an Asset Status property switches them to the current status controls. Earlier status views with a selected status or a legacy highlight now open in **Color** mode and show all status colors. Those with neither open in **Original** mode.
+
+Views saved before transparency controls default to 0%.
+
+Hidden assets remain hidden. The panel reports hidden matches and assets without usable geometry. Automatic fitting requires visible geometry; an already saved view can still reopen when its matches have since disappeared or become hidden.
 
 **Exit view** restores the section box and Object Colors display you had before entering Project View. Closing the panel only hides its controls; use Exit view to end the inspection. Project View does not change an asset's authored materials or visibility.
 
-Saved views are root-layer scene records. A coworker needs the saved scene and the same extensions. On a read-only scene you can open and inspect views but cannot create, update, rename, or delete their records.
+Saved views are root-layer scene records. A coworker needs the saved scene and the same extensions. On a read-only scene you can open and inspect views but cannot change saved views or project section defaults.
 
 ## Development
 
-The integration design and current scope are in [DESIGN.md](DESIGN.md). Isolated Kit verification lives under [tests](tests/) and runs with `run-verify-kit.ps1` once the local Kit 110.2 installation is available.
+The integration design and current scope are in [DESIGN.md](DESIGN.md). Fixed Project ID and Asset Status property names remain undecided; the dropdowns support the properties discovered in each model. Isolated Kit verification lives under [tests](tests/) and runs with `run-verify-kit.ps1` once the local Kit 110.2 installation is available.

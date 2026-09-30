@@ -1,12 +1,24 @@
 {
   "passed": [
     "Project View extension starts and creates its Window panel",
+    "property dropdown refreshes IDs and clicking an ID fits its assets with 1 m padding and automatically enables status colors",
+    "Show Box in Project View hides the overlay without disabling clipping and stays synced with Section Box",
+    "Asset Status properties and values are project-scoped; all statuses stay colored when a row is clicked and circles edit each status without moving the section",
+    "Original and Color are between the status dropdown and list; Original survives row and palette edits and Color restores every status",
+    "each status button switches between 100% hide and 0% restore, updates its slider, and leaves other statuses and the section unchanged",
+    "a failed automatic preview retains the active ID selection, section and highlights",
+    "project changes clear the status selection, color the new project's statuses, recompute properties, and reject stale palette callbacks",
+    "rapid ID clicks leave the final ID active and Exit restores prior section and colors without changing model, selection or camera",
     "exact Identity Data ID discovers placed assets; hidden geometry is excluded from the 1 m fit",
-    "Preview clips and highlights matches, preserves original surroundings, selection, model and camera",
-    "No highlight reveals original materials and re-enabling uses the chosen color",
+    "Preview clips the project and colors its first available status property while preserving outside materials, selection, model and camera",
+    "legacy highlight clearing reveals original materials and re-enabling uses the chosen color",
     "multiple views, rename, update, duplicate-name refusal, and delete undo/redo retain independent records",
     "a read-only scene refuses a new saved record",
+    "saved views capture Color or Original mode and custom status colors; schema 1 loads and schema 2 derives its mode from the prior selection",
     "Exit restores the original section and existing Object Colors scheme",
+    "scene Save/reopen retains Color and Original modes; Refresh follows status values, Original allows unpainted edits, and Color restores all groups without moving the box",
+    "saved transparency survives scene Save/reopen and mode changes; schema 3 defaults to 0% and invalid percentages are rejected",
+    "legacy saved highlights remain readable; selecting a status property migrates to all-status colors and Original clears them",
     "normal scene Save/reopen shares named views without activating or moving the camera",
     "new matching assets join on Refresh, retain saved box, and enter the box only on Refit",
     "Refit with no visible match refreshes counts and colors while retaining the section",
@@ -15,6 +27,8 @@
     "opening a saved view selects its recorded Project ID attribute and choices",
     "the 105th distinct Project ID remains searchable and can be previewed",
     "Preview refuses a no-visible project without changing section, colors, model or camera",
-    "a centimetre scene fits visible assets with exactly 100 stage units of padding per side"
+    "a centimetre scene fits visible assets with exactly 100 stage units of padding per side",
+    "Save and Reset sit above full-width Exit; UI Save restores rotated geometry on project click and Reset returns future clicks to 1 m fitting without changing color mode",
+    "section overwrite and Reset survive scene Save/reopen, isolate project properties, leave named views intact, and refuse read-only or invisible-project Reset without losing the saved section"
   ]
 }

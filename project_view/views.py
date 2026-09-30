@@ -11,13 +11,16 @@ import omni.kit.app
 import omni.kit.viewport.utility as viewport_utility
 import omni.usd
 from object_colors.discovery import property_label, scan_steps
+from object_colors.appearance import Appearance
 from object_colors.extension import get_controller
+from object_colors.scheme import Group
 from pxr import Gf, UsdGeom
 from section_box.extension import get_runtime_state
 from section_box.model import Face, SectionBox
 from section_box.selection import classify_visible_paths, fit_box_to_paths
 
-from .records import BoxRecord, IDENTITY_PROJECT_ID, ProjectId, ViewContent, ViewRecord, ViewStore
+from .records import BoxRecord, IDENTITY_PROJECT_ID, ProjectId, SectionDefault, ViewContent, ViewRecord, ViewStore
+from .statuses import StatusSettings, status_groups, status_properties, valid_color
 
 
 DEFAULT_COLOR = "#E15759"
@@ -54,6 +57,9 @@ class ProjectViews:
         self.store = self._new_store(self.stage) if self.stage else None
         self.properties: tuple[str, ...] = ()
         self.choices: tuple[Choice, ...] = ()
+        self.status_properties: tuple[str, ...] = ()
+        self.status_groups: tuple[Group, ...] = ()
+        self._status_objects = ()
         self.property_name = IDENTITY_PROJECT_ID
         self.membership = Membership()
         self.content: ViewContent | None = None
@@ -62,6 +68,7 @@ class ProjectViews:
         self.busy = False
         self._scan_result = None
         self._scope = None
+        self._committed_assignments: dict[str, str | Appearance] = {}
         self._baseline = None
         self._session_viewport = None
         self._intent = 0
@@ -132,6 +139,10 @@ class ProjectViews:
             self._session_viewport = None
             self._scan_result = None
             self.membership = Membership()
+            self.status_properties = ()
+            self.status_groups = ()
+            self._status_objects = ()
+            self._committed_assignments = {}
             self.properties = ()
             self.choices = ()
             self.status = "Choose a Project ID to preview." if self.stage else "Open a USD scene."
@@ -247,22 +258,41 @@ class ProjectViews:
         addition = 2 * padding_metres / scale
         return replace(box, size=box.size + Gf.Vec3d(addition, addition, addition))
 
-    async def _paint(self, stage, matching: Membership, color: str | None) -> Membership:
+    @staticmethod
+    def _status_state(scan, matching: Membership, settings: StatusSettings | None):
+        paths = set(matching.matching)
+        objects = [obj for obj in scan.objects if obj.path in paths]
+        properties = status_properties(objects)
+        if settings is None:
+            settings = StatusSettings(properties[0] if properties else "")
+        return properties, status_groups(objects, settings), tuple(objects)
+
+    @staticmethod
+    def _assignments(content: ViewContent, matching: Membership, groups: tuple[Group, ...]) -> dict[str, str | Appearance]:
+        settings = content.asset_status
+        if settings is None:
+            color = content.highlight_color
+            return {path: color for path in matching.matching if color is not None}
+        transparencies = dict(settings.transparencies)
+        return {path: Appearance(group.color if settings.color_enabled else None, transparencies.get(group.key, 0))
+                for group in groups if settings.color_enabled or transparencies.get(group.key, 0)
+                for path in group.objects}
+
+    async def _paint(self, stage, matching: Membership, assignments: dict[str, str | Appearance]) -> Membership:
         acquired = self._scope is None
         if self._scope is None:
             self._scope = get_controller().begin_inspection(stage)
-        assignments = {path: color for path in matching.matching if color is not None}
+        scope = self._scope
         try:
-            report = await self._scope.apply(assignments)
+            report = await scope.apply(assignments)
         except BaseException:
             if acquired:
-                scope, self._scope = self._scope, None
+                if self._scope is scope:
+                    self._scope = None
                 await asyncio.shield(scope.close())
-            elif self.content is not None:
-                previous_color = self.content.highlight_color
-                previous = {path: previous_color for path in self.membership.matching if previous_color is not None}
+            elif self._scope is scope:
                 try:
-                    await self._scope.apply(previous)
+                    await scope.apply(self._committed_assignments)
                 except BaseException:
                     pass
             raise
@@ -275,9 +305,7 @@ class ProjectViews:
             scope, self._scope = self._scope, None
             await scope.close()
             return
-        color = self.content.highlight_color
-        assignments = {path: color for path in self.membership.matching if color is not None}
-        await self._scope.apply(assignments)
+        await self._scope.apply(self._committed_assignments)
 
     async def preview(self, property_name: str, project_id: ProjectId, padding_metres: float = 1.0) -> Membership:
         self._intent += 1
@@ -294,33 +322,52 @@ class ProjectViews:
                 matching = self._match(scan, property_name, project_id)
                 if not matching.matching:
                     raise ValueError("No assets match this Project ID.")
-                if not matching.visible:
-                    raise ValueError(f"{len(matching.matching)} assets match, but none has visible geometry to fit.")
-                box = self._padded_box(stage, matching.visible, padding_metres, scale)
-                if box is None:
-                    raise ValueError("Matching assets have no geometry that can be fitted.")
+                saved_section = self.store.get_section(property_name, project_id)
+                box = None
+                if saved_section is not None:
+                    if saved_section.up_axis != "Z" or not math.isclose(scale, saved_section.metres_per_unit, rel_tol=1e-9):
+                        raise ValueError("Scene units or up axis changed since this project section was saved.")
+                else:
+                    if not matching.visible:
+                        raise ValueError(f"{len(matching.matching)} assets match, but none has visible geometry to fit.")
+                    box = self._padded_box(stage, matching.visible, padding_metres, scale)
+                    if box is None:
+                        raise ValueError("Matching assets have no geometry that can be fitted.")
                 self._require_clipping(stage, viewport, True)
                 original = section.snapshot
                 was_new = self._scope is None
-                matching = await self._paint(stage, matching, DEFAULT_COLOR)
+                properties, groups, objects = self._status_state(scan, matching, None)
+                previous = self.content.asset_status if self.content is not None else None
+                settings = (replace(previous, selected_key=None, color_enabled=True)
+                            if previous is not None and previous.property_name in properties
+                            else StatusSettings(properties[0] if properties else ""))
+                groups = status_groups(objects, settings)
+                content = ViewContent(property_name, project_id, self._box_record(section), False,
+                                      DEFAULT_COLOR, padding_metres, scale, "Z", settings)
+                assignments = self._assignments(content, matching, groups)
+                matching = await self._paint(stage, matching, assignments)
                 try:
                     if (intent != self._intent or stage != self.stage or section.snapshot != original
                             or viewport_utility.get_active_viewport(usd_context_name=None) != viewport):
                         raise asyncio.CancelledError("The scene or section changed during Preview.")
-                    section.apply(replace(original, box=box, enabled=True,
-                                          show_box=True, saved_position_path=""))
+                    if saved_section is not None:
+                        self._restore_box(section, replace(saved_section.box, enabled=True, show_box=True))
+                    else:
+                        section.apply(replace(original, box=box, enabled=True,
+                                              show_box=True, saved_position_path=""))
                 except BaseException:
                     await self._revert_paint(was_new)
                     raise
                 if self._baseline is None:
                     self._baseline = original
                     self._session_viewport = viewport
-                self.content = ViewContent(property_name, project_id, self._box_record(section), True,
-                                           DEFAULT_COLOR, padding_metres, scale, "Z")
+                self.content = replace(content, box=self._box_record(section))
                 self.property_name = property_name
                 self.choices = self._choices_for_property(scan, property_name)
                 self.source_id = None
                 self.membership = matching
+                self.status_properties, self.status_groups, self._status_objects = properties, groups, objects
+                self._committed_assignments = assignments
                 self.status = self._summary(matching)
                 return matching
             except asyncio.CancelledError:
@@ -357,7 +404,9 @@ class ProjectViews:
                 self._require_clipping(stage, viewport, content.box.enabled)
                 original = section.snapshot
                 was_new = self._scope is None
-                matching = await self._paint(stage, matching, content.highlight_color)
+                properties, groups, objects = self._status_state(scan, matching, content.asset_status)
+                assignments = self._assignments(content, matching, groups)
+                matching = await self._paint(stage, matching, assignments)
                 try:
                     if (intent != self._intent or stage != self.stage or section.snapshot != original
                             or viewport_utility.get_active_viewport(usd_context_name=None) != viewport):
@@ -374,6 +423,8 @@ class ProjectViews:
                 self.choices = self._choices_for_property(scan, content.property_name)
                 self.source_id = view_id
                 self.membership = matching
+                self.status_properties, self.status_groups, self._status_objects = properties, groups, objects
+                self._committed_assignments = assignments
                 self.status = self._summary(matching)
                 return matching
             except asyncio.CancelledError:
@@ -391,6 +442,10 @@ class ProjectViews:
         self._intent += 1
         intent = self._intent
         async with self._lock:
+            if intent != self._intent:
+                return self.membership
+            if self.content is None:
+                raise ValueError("Preview or open a project view first.")
             self.busy = True
             self.status = "Refreshing current project assets..."
             self._notify()
@@ -399,18 +454,42 @@ class ProjectViews:
                 scan = await self._scan(intent)
                 matching = self._match(scan, self.content.property_name, self.content.project_id)
                 was_new = self._scope is None
-                matching = await self._paint(stage, matching, self.content.highlight_color)
+                properties, groups, objects = self._status_state(scan, matching, self.content.asset_status)
+                assignments = self._assignments(self.content, matching, groups)
+                matching = await self._paint(stage, matching, assignments)
                 if intent != self._intent or stage != self.stage:
                     await self._revert_paint(was_new)
                     raise asyncio.CancelledError("The scene changed during Refresh.")
                 self.membership = matching
+                self.status_properties, self.status_groups, self._status_objects = properties, groups, objects
+                self._committed_assignments = assignments
                 self.status = self._summary(matching)
                 return matching
             finally:
                 self.busy = False
                 self._notify()
 
+    def save_section(self) -> SectionDefault:
+        if self.busy:
+            raise ValueError("Wait for the current project operation to finish before saving its section.")
+        if self.content is None:
+            raise ValueError("Preview or open a project view first.")
+        _, section, _, _, scale = self._bound()
+        record = SectionDefault(self.content.property_name, self.content.project_id,
+                                self._box_record(section), scale)
+        record = self.store.save_section(record)
+        self.content = replace(self.content, box=record.box)
+        self.status = f"Saved the default section for Project ID {record.project_id.value}. {self._save_hint()}"
+        self._notify()
+        return record
+
+    async def reset_section(self) -> Membership:
+        return await self._refit(1.0, reset_default=True)
+
     async def refit(self, padding_metres: float) -> Membership:
+        return await self._refit(padding_metres, reset_default=False)
+
+    async def _refit(self, padding_metres: float, *, reset_default: bool) -> Membership:
         if self.content is None:
             raise ValueError("Preview or open a project view first.")
         if not math.isfinite(padding_metres) or padding_metres < 0:
@@ -418,36 +497,158 @@ class ProjectViews:
         self._intent += 1
         intent = self._intent
         async with self._lock:
+            if intent != self._intent:
+                return self.membership
+            if self.content is None:
+                raise ValueError("Preview or open a project view first.")
             self.busy = True
-            self.status = "Refitting the section box..."
+            self.status = "Resetting the project section..." if reset_default else "Refitting the section box..."
             self._notify()
             try:
                 stage, section, _, viewport, scale = self._bound()
+                store = self.store
+                if reset_default:
+                    store._require_writable()
+                    store.get_section(self.content.property_name, self.content.project_id)
                 scan = await self._scan(intent)
                 matching = self._match(scan, self.content.property_name, self.content.project_id)
                 box = self._padded_box(stage, matching.visible, padding_metres, scale) if matching.visible else None
+                if reset_default and box is None:
+                    raise ValueError("Cannot reset this section: matching assets have no visible geometry to fit.")
                 if box is not None:
                     self._require_clipping(stage, viewport, True)
                 original = section.snapshot
                 was_new = self._scope is None
-                matching = await self._paint(stage, matching, self.content.highlight_color)
+                properties, groups, objects = self._status_state(scan, matching, self.content.asset_status)
+                assignments = self._assignments(self.content, matching, groups)
+                matching = await self._paint(stage, matching, assignments)
+                applied_box = False
                 try:
                     if (intent != self._intent or stage != self.stage or section.snapshot != original
                             or viewport_utility.get_active_viewport(usd_context_name=None) != viewport):
                         raise asyncio.CancelledError("The scene or section changed during Refit.")
                     if box is not None:
+                        applied_box = True
                         section.apply(replace(original, box=box, enabled=True,
                                               show_box=True, saved_position_path=""))
+                    if reset_default:
+                        store.reset_section(self.content.property_name, self.content.project_id)
                 except BaseException:
-                    await self._revert_paint(was_new)
+                    try:
+                        if applied_box and stage == self.stage and section.stage == stage:
+                            section.apply(original)
+                    finally:
+                        await self._revert_paint(was_new)
                     raise
                 self.content = replace(self.content, box=self._box_record(section), padding_metres=padding_metres)
                 self.membership = matching
+                self.status_properties, self.status_groups, self._status_objects = properties, groups, objects
+                self._committed_assignments = assignments
                 self.status = self._summary(matching) + (" Box unchanged: no visible geometry to fit." if box is None else "")
+                if reset_default:
+                    self.status += f" Reset to the automatic section with 1 m padding. {self._save_hint()}"
                 return matching
             finally:
                 self.busy = False
                 self._notify()
+
+    def _status_context(self):
+        content = self.content
+        if content is None:
+            return None
+        return (self.generation, content.property_name, content.project_id,
+                content.asset_status.property_name if content.asset_status is not None else None)
+
+    async def _update_status(self, change: Callable[[StatusSettings], StatusSettings]) -> Membership:
+        requested = self._status_context()
+        if requested is None:
+            raise ValueError("Preview or open a project view first.")
+        self._intent += 1
+        intent = self._intent
+        async with self._lock:
+            if intent != self._intent or requested != self._status_context():
+                return self.membership
+            self.busy = True
+            self.status = "Updating Asset Status..."
+            self._notify()
+            try:
+                stage, _, _, viewport, _ = self._bound()
+                settings = self.content.asset_status or StatusSettings(
+                    self.status_properties[0] if self.status_properties else "",
+                    color_enabled=self.content.highlight_enabled)
+                settings = change(settings)
+                groups = status_groups(self._status_objects, settings)
+                content = replace(self.content, asset_status=settings, highlight_enabled=False)
+                assignments = self._assignments(content, self.membership, groups)
+                was_new = self._scope is None
+                matching = await self._paint(stage, self.membership, assignments)
+                if (intent != self._intent or stage != self.stage or requested != self._status_context()
+                        or viewport_utility.get_active_viewport(usd_context_name=None) != viewport):
+                    await self._revert_paint(was_new)
+                    raise asyncio.CancelledError("The project changed during the Asset Status update.")
+                self.content = content
+                self.status_groups = groups
+                self.membership = matching
+                self._committed_assignments = assignments
+                self.status = self._summary(matching)
+                return matching
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self.status = str(exc)
+                raise
+            finally:
+                self.busy = False
+                self._notify()
+
+    async def set_status_property(self, property_name: str) -> Membership:
+        def choose(settings):
+            if property_name not in self.status_properties:
+                raise ValueError("Choose an Asset Status property available in this project.")
+            return (replace(settings, selected_key=None) if property_name == settings.property_name
+                    else StatusSettings(property_name, color_enabled=settings.color_enabled))
+
+        return await self._update_status(choose)
+
+    async def select_status(self, key: str | None) -> Membership:
+        def choose(settings):
+            if key is not None and not any(group.key == key for group in self.status_groups):
+                raise ValueError("Choose an Asset Status value available in this project.")
+            return replace(settings, selected_key=key)
+
+        return await self._update_status(choose)
+
+    async def set_status_coloring(self, enabled: bool) -> Membership:
+        def choose(settings):
+            if type(enabled) is not bool:
+                raise ValueError("Choose Color or Original for Asset Status display.")
+            return replace(settings, color_enabled=enabled, selected_key=None)
+
+        return await self._update_status(choose)
+
+    async def set_status_color(self, key: str, color: str) -> Membership:
+        def choose(settings):
+            if not any(group.key == key for group in self.status_groups):
+                raise ValueError("Choose an Asset Status value available in this project.")
+            if not valid_color(color):
+                raise ValueError("Choose a six-digit color such as #E15759.")
+            colors = dict(settings.colors)
+            colors[key] = color.upper()
+            return replace(settings, colors=tuple(sorted(colors.items())))
+
+        return await self._update_status(choose)
+
+    async def set_status_transparency(self, key: str, percentage: int) -> Membership:
+        def choose(settings):
+            if not any(group.key == key for group in self.status_groups):
+                raise ValueError("Choose an Asset Status value available in this project.")
+            if type(percentage) is not int or not 0 <= percentage <= 100:
+                raise ValueError("Transparency must be a whole percentage from 0 to 100.")
+            values = dict(settings.transparencies)
+            values[key] = percentage
+            return replace(settings, transparencies=tuple(sorted(values.items())))
+
+        return await self._update_status(choose)
 
     async def set_highlight(self, color: str | None) -> Membership:
         if self.content is None:
@@ -458,14 +659,23 @@ class ProjectViews:
         self._intent += 1
         intent = self._intent
         async with self._lock:
+            if intent != self._intent:
+                return self.membership
+            if self.content is None:
+                raise ValueError("Preview or open a project view first.")
             stage, *_ = self._bound()
             was_new = self._scope is None
-            matching = await self._paint(stage, self.membership, color)
+            assignments = {path: color for path in self.membership.matching if color is not None}
+            matching = await self._paint(stage, self.membership, assignments)
             if intent != self._intent or stage != self.stage:
                 await self._revert_paint(was_new)
                 raise asyncio.CancelledError("The scene changed during highlight update.")
-            self.content = replace(self.content, highlight_enabled=color is not None, chosen_color=chosen)
+            self.content = replace(self.content, highlight_enabled=color is not None, chosen_color=chosen,
+                                   asset_status=None)
             self.membership = matching
+            self.status_groups = status_groups(self._status_objects, StatusSettings(
+                self.status_properties[0] if self.status_properties else ""))
+            self._committed_assignments = assignments
             self.status = self._summary(matching)
             self._notify()
             return matching
@@ -534,6 +744,10 @@ class ProjectViews:
                     self.content = None
                     self.source_id = None
                     self.membership = Membership()
+                    self.status_properties = ()
+                    self.status_groups = ()
+                    self._status_objects = ()
+                    self._committed_assignments = {}
                     self.status = "Project view closed."
                     self._notify()
 
@@ -552,6 +766,10 @@ class ProjectViews:
             self._session_viewport = None
             self.content = None
             self.membership = Membership()
+            self.status_properties = ()
+            self.status_groups = ()
+            self._status_objects = ()
+            self._committed_assignments = {}
             self._listeners.clear()
             if scope is not None:
                 asyncio.ensure_future(scope.close())
