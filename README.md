@@ -4,7 +4,9 @@ Save named construction inspection areas by Project ID. A view remembers its Pro
 
 ## Install
 
-Download the [Project View source ZIP](https://github.com/sdg-xs/project.view/archive/refs/heads/main.zip), or clone this repository. The tested Section Box and Object Colors dependencies are included under `bundled_exts`, including the Object Colors transparency support required by this version.
+Download the [Project View source ZIP](https://github.com/sdg-xs/project.view/archive/refs/heads/main.zip), or clone this repository. Install [Section Box](https://github.com/sdg-xs/usd-composer-section-box) and [Object Colors](https://github.com/sdgnemyno/usd-composer-object-colors) separately as `section.box` and `object.color` under the same extension search directory.
+
+This version requires Object Colors with `object_colors.appearance.Appearance` and inspection transparency support. At the time of the October 5, 2026 verification, those changes existed in the local Object Colors checkout but had not been published upstream. An older Object Colors installation will prevent Project View from loading.
 
 In PowerShell, choose a directory for your extensions and run:
 
@@ -14,21 +16,19 @@ Set-Location C:\Omniverse\extensions
 git clone https://github.com/sdg-xs/project.view.git project.view
 ```
 
-If you download the ZIP, extract and rename its top-level folder to `project.view` under `C:\Omniverse\extensions`. That folder must directly contain `config/extension.toml` and `bundled_exts`. Do not point Kit at a ZIP file or at a folder containing an extra nested repository folder.
+If you download the ZIP, extract and rename its top-level folder to `project.view` under `C:\Omniverse\extensions`. That folder must directly contain `config/extension.toml`. Do not point Kit at a ZIP file or at a folder containing an extra nested repository folder.
 
-Add both `C:\Omniverse\extensions` and `C:\Omniverse\extensions\project.view\bundled_exts` to your app's extension search paths and enable `project.view` in the Extension Manager. Alternatively, add these arguments to your existing Kit or Composer launch command:
+Add `C:\Omniverse\extensions` to your app's extension search paths and enable `project.view` in the Extension Manager. Alternatively, add these arguments to your existing Kit or Composer launch command:
 
 ```text
---ext-folder C:\Omniverse\extensions --ext-folder C:\Omniverse\extensions\project.view\bundled_exts --enable project.view
+--ext-folder C:\Omniverse\extensions --enable project.view
 ```
 
 Kit enables its Section Box and Object Colors dependencies. Open the panel through **Window > Project View**. Save work in an already-running Composer session before relaunching it with these options.
 
 This version targets Kit 110.2 with an RTX viewport and a Z-up USD stage. The stage must have valid metres-per-unit metadata. The running Object Colors and Section Box services must be attached to the active viewport's scene.
 
-If Kit cannot find `project.view`, check the search path and folder layout above. If it reports a missing `section.box` or `object.color` dependency, check that the `bundled_exts` search path was added. Disable or remove older copies of those extensions from other search paths so Kit loads the bundled versions. This repository contains an extension, not a standalone Composer application.
-
-Dependency sources and snapshot details are recorded in [bundled_exts/README.md](bundled_exts/README.md).
+If Kit cannot find `project.view`, check the search path and folder layout above. If it reports a missing `section.box` or `object.color` dependency, install that extension separately. This repository contains an extension, not a standalone Composer application.
 
 ## Verification
 
