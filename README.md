@@ -4,9 +4,35 @@ Save named construction inspection areas by Project ID. A view remembers its Pro
 
 ## Install
 
-Put `project.view`, `section.box`, and `object.color` under the same Kit extension search directory. Enable `project.view` in your app's Extension Manager if one is available, or launch Kit with `--ext-folder <parent-directory> --enable project.view`. Kit enables its Section Box and Object Colors dependencies. Save work in an already-running Composer session before relaunching it with these options.
+Download the [Project View source ZIP](https://github.com/sdg-xs/project.view/archive/refs/heads/main.zip), or clone this repository. The tested Section Box and Object Colors dependencies are included under `bundled_exts`, including the Object Colors transparency support required by this version.
+
+In PowerShell, choose a directory for your extensions and run:
+
+```powershell
+New-Item -ItemType Directory -Force C:\Omniverse\extensions | Out-Null
+Set-Location C:\Omniverse\extensions
+git clone https://github.com/sdg-xs/project.view.git project.view
+```
+
+If you download the ZIP, extract and rename its top-level folder to `project.view` under `C:\Omniverse\extensions`. That folder must directly contain `config/extension.toml` and `bundled_exts`. Do not point Kit at a ZIP file or at a folder containing an extra nested repository folder.
+
+Add both `C:\Omniverse\extensions` and `C:\Omniverse\extensions\project.view\bundled_exts` to your app's extension search paths and enable `project.view` in the Extension Manager. Alternatively, add these arguments to your existing Kit or Composer launch command:
+
+```text
+--ext-folder C:\Omniverse\extensions --ext-folder C:\Omniverse\extensions\project.view\bundled_exts --enable project.view
+```
+
+Kit enables its Section Box and Object Colors dependencies. Open the panel through **Window > Project View**. Save work in an already-running Composer session before relaunching it with these options.
 
 This version targets Kit 110.2 with an RTX viewport and a Z-up USD stage. The stage must have valid metres-per-unit metadata. The running Object Colors and Section Box services must be attached to the active viewport's scene.
+
+If Kit cannot find `project.view`, check the search path and folder layout above. If it reports a missing `section.box` or `object.color` dependency, check that the `bundled_exts` search path was added. Disable or remove older copies of those extensions from other search paths so Kit loads the bundled versions. This repository contains an extension, not a standalone Composer application.
+
+Dependency sources and snapshot details are recorded in [bundled_exts/README.md](bundled_exts/README.md).
+
+## Verification
+
+On October 5, 2026, all 30 integration checks passed in a private Kit 110.2 process. The suite covers extension startup, panel controls, project discovery, section fitting, status colors, transparency, scene save/reopen, and cleanup. See [the results](verification/kit-results.json) and [the verification script](tests/verify_kit.py). These checks use generated test scenes.
 
 ## Create a view
 

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "name": "IFC element type",
+  "scope": "stage",
+  "mode": "Property",
+  "property_key": "omni:hoops:metadata:TYPE",
+  "enabled": true,
+  "palettes": {}
+}

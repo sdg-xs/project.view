@@ -1,5 +1,8 @@
 __pycache__/
 *.pyc
+graphify-out/
+verification/current-*.log
+verification/package-check-process.json
 verification/kit.log
 verification/composer-*.log
 verification/composer-user.config.json

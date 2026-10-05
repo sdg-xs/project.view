@@ -1,0 +1,32 @@
+[package]
+version = "1.1.0"
+title = "Section Box"
+description = "Interactive section-box clipping tool for the viewport. Provides a 3D manipulable box that clips geometry along its active faces."
+category = "Viewport"
+keywords = ["section", "clipping", "box", "viewport", "cut"]
+icon = "data/icon.svg"
+
+[dependencies]
+"omni.kit.pip_archive" = {}
+"omni.ui" = {}
+"omni.ui.scene" = {}
+"omni.usd" = {}
+"omni.kit.commands" = {}
+"omni.kit.usd_undo" = {}
+"omni.kit.viewport.utility" = {}
+"omni.kit.viewport.window" = {}
+"omni.kit.viewport.registry" = {}
+"omni.kit.widget.toolbar" = {}
+
+[[python.module]]
+name = "section_box"
+
+[settings]
+# Default full extents for a new section box (world units).
+persistent.exts."section.box".defaultSize = [100.0, 100.0, 100.0]
+
+# Which faces clip by default.  Valid: MIN_X, MAX_X, MIN_Y, MAX_Y, MIN_Z, MAX_Z.
+persistent.exts."section.box".defaultFaces = ["MIN_X", "MAX_X", "MIN_Y", "MAX_Y", "MIN_Z", "MAX_Z"]
+
+# Parent USD prim path for named saved positions.
+persistent.exts."section.box".stagePrimPath = "/SectionBox"

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "name": "Revit instance workset",
+  "scope": "stage",
+  "mode": "Property",
+  "property_key": "omni:hoops:metadata:tn__IdentityData_qC:Workset",
+  "enabled": true,
+  "palettes": {}
+}
